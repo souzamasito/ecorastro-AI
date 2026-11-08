@@ -1,0 +1,9 @@
+# EcoRastro AI — saídas internas contêm o texto original dos relatos (acesso restrito)
+saidas/**/*_interna.*
+
+# Resultados de testes da skill (podem conter saídas internas)
+.claude/skills/ecorastro-analisador-workspace/
+
+# Python
+__pycache__/
+*.pyc

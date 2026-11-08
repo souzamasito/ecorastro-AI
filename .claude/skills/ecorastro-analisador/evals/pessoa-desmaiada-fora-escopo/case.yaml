@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: pessoa-desmaiada-fora-escopo
+expected_outcome: |
+  Emergência médica individual, não problema urbano: resultado fora_escopo, sem ocorrências. Mesmo assim
+  alerta_emergencia acionado com samu_192 e origem ['triagem']. A resposta começa orientando ligar 192
+  imediatamente e esclarece que a skill não aciona serviços.

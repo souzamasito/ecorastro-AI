@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: buraco-acidente-simples
+expected_outcome: |
+  Análise individual, interna, com uma ocorrência infraestrutura_urbana/inf_pavimento, natureza problema_existente.
+  Prioridade alta por ex02 (queda relatada), sem ex01. Local relatado "Rua das Flores, perto do número 120";
+  bairro, município e coordenadas ausentes. "Ontem" não é convertido em data, pois não há data de recebimento
+  confiável. JSON salvo em saidas/json/ na convenção de nomes e válido no validador. Resposta curta com nível,
+  motivo e pendências.

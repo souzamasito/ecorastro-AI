@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: fio-caido-emergencia
+expected_outcome: |
+  Ocorrência infraestrutura_urbana/inf_rede_eletrica com prioridade critica por ex01 (perigo atual, concreto e
+  relatado). alerta_emergencia acionado com concessionária de energia e bombeiros, origem oc-1. A resposta começa
+  pelo alerta e deixa claro que nenhum serviço foi acionado. Canal whatsapp; evidências literais, sem acentos
+  acrescentados ao texto do cidadão.

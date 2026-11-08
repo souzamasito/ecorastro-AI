@@ -1,0 +1,14 @@
+schema_version: "1.1"
+name: lote-csv-misto
+expected_outcome: |
+  Lote de 11 linhas: uma vazia (ignorada e contada no relatório), 8 classificadas, 1 informação insuficiente
+  (P-1010) e 1 fora do escopo (P-1005). P-1002 (árvore sobre fios pegando fogo) é crítica por ex01, com alerta, e
+  abre o relatório. P-1003 é necessidade de infraestrutura. P-1004 tem 'ontem' convertido em 2026-11-04 porque
+  há data de recebimento. P-1011 é acessibilidade (rd01). Nome e telefone de P-1006 e o protocolo citado em
+  P-1007 não aparecem no relatório nem nos textos mascarados. Av. Paraná x Rua 3 aparece como local recorrente.
+  Alertas de privacidade do validador são tratados (mascarando ou explicando), nunca ignorados.
+  Matriz 1.1.0 (skill 0.3.0): P-1011 é problema existente com obra de adequação e fica alta por ex07; P-1006
+  (esgoto) fica média, com risco potencial à saúde 2 e falha do serviço de esgoto avaliada; P-1001 e P-1008
+  (semáforo apagado em cruzamento de avenida) ficam alta por ex06. A resposta na conversa usa o formato curto de lote.
+context:
+  scaffold_script: place-files.sh

@@ -1,0 +1,684 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ecorastro:schema:analise:1.2.0",
+  "title": "EcoRastro AI — Análise de relato urbano",
+  "description": "Contrato v1.2.0 das saídas da skill ecorastro-analisador e da futura API Django. Os códigos de categoria, subcategoria, fator, regra e órgão são identificadores estáveis definidos em references/categorias.md (versao_taxonomia 1.0.0) e references/priorizacao.md (versao_matriz_prioridade 1.1.0). Compatibilidade com as versões 1.0.0 e 1.1.0: docs/compatibilidade-versoes.md; schemas anteriores em assets/historico/. Regras aritméticas (pontuação, teto, completude) e a coerência entre analises de um lote são verificadas por script, não por este schema.",
+  "oneOf": [
+    { "$ref": "#/$defs/analise_relato" },
+    { "$ref": "#/$defs/lote_analises" }
+  ],
+  "$defs": {
+    "versao": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "data_hora": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]+)?)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "texto_nao_vazio": {
+      "type": "string",
+      "minLength": 1
+    },
+    "visibilidade": {
+      "description": "interna: uso restrito da equipe, pode conter texto_original. publica: destinada a compartilhamento, texto_original sempre nulo.",
+      "enum": ["interna", "publica"]
+    },
+    "status_informacao": {
+      "description": "relatado: está no texto. inferido: dedução explicada. verificado: confirmado por fonte externa (nunca atribuído pela skill). ausente: sem base.",
+      "enum": ["relatado", "inferido", "verificado", "ausente"]
+    },
+    "verificacao": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fonte", "verificado_em", "responsavel"],
+      "properties": {
+        "fonte": { "$ref": "#/$defs/texto_nao_vazio" },
+        "verificado_em": { "$ref": "#/$defs/data_hora" },
+        "responsavel": { "type": ["string", "null"] }
+      }
+    },
+    "regras_status": {
+      "description": "Coerência entre status, valor, evidência, raciocínio e verificação.",
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "ausente" } }, "required": ["status"] },
+          "then": { "properties": { "verificacao": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "relatado" } }, "required": ["status"] },
+          "then": { "properties": { "evidencia": { "$ref": "#/$defs/texto_nao_vazio" } } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "inferido" } }, "required": ["status"] },
+          "then": { "properties": { "raciocinio": { "$ref": "#/$defs/texto_nao_vazio" } } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "verificado" } }, "required": ["status"] },
+          "then": { "properties": { "verificacao": { "$ref": "#/$defs/verificacao" } } }
+        }
+      ]
+    },
+    "ausente_sem_evidencia": {
+      "description": "Campo ausente não cita evidência. Única exceção: data_ocorrencia (ver abaixo).",
+      "if": { "properties": { "status": { "const": "ausente" } }, "required": ["status"] },
+      "then": { "properties": { "evidencia": { "type": "null" } } }
+    },
+    "informacao": {
+      "description": "Campo extraído do relato com rastreabilidade. 'evidencia' é sempre trecho literal do texto mascarado.",
+      "allOf": [
+        { "$ref": "#/$defs/informacao_base" },
+        { "$ref": "#/$defs/ausente_sem_evidencia" }
+      ]
+    },
+    "informacao_base": {
+      "description": "Estrutura comum dos campos extraídos, sem a regra de evidência para campos ausentes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valor", "status", "evidencia", "raciocinio", "verificacao"],
+      "properties": {
+        "valor": { "type": ["string", "number", "null"] },
+        "status": { "$ref": "#/$defs/status_informacao" },
+        "evidencia": { "type": ["string", "null"] },
+        "raciocinio": { "type": ["string", "null"] },
+        "verificacao": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/verificacao" }]
+        }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/regras_status" },
+        {
+          "if": { "properties": { "status": { "const": "ausente" } }, "required": ["status"] },
+          "then": { "properties": { "valor": { "type": "null" } } },
+          "else": { "properties": { "valor": { "type": ["string", "number"] } } }
+        }
+      ]
+    },
+    "informacao_texto": {
+      "allOf": [
+        { "$ref": "#/$defs/informacao" },
+        { "properties": { "valor": { "type": ["string", "null"] } } }
+      ]
+    },
+    "informacao_sem_inferencia": {
+      "description": "Para endereço, bairro e coordenadas: a skill não pode inferir.",
+      "allOf": [
+        { "$ref": "#/$defs/informacao" },
+        { "properties": { "status": { "enum": ["relatado", "verificado", "ausente"] } } }
+      ]
+    },
+    "latitude": {
+      "allOf": [
+        { "$ref": "#/$defs/informacao_sem_inferencia" },
+        { "properties": { "valor": { "type": ["number", "null"], "minimum": -90, "maximum": 90 } } }
+      ]
+    },
+    "longitude": {
+      "allOf": [
+        { "$ref": "#/$defs/informacao_sem_inferencia" },
+        { "properties": { "valor": { "type": ["number", "null"], "minimum": -180, "maximum": 180 } } }
+      ]
+    },
+    "data_ocorrencia": {
+      "description": "valor em AAAA-MM-DD. 'inferido' só quando derivado de expressão relativa do relato combinada com relato.recebido_em. Com status 'ausente', 'evidencia' pode guardar a expressão temporal literal do relato ('ontem', 'há três semanas') que não pôde ser convertida por falta de data de referência; assim o sistema consegue convertê-la depois, quando recebido_em for conhecido.",
+      "allOf": [
+        { "$ref": "#/$defs/informacao_base" },
+        {
+          "properties": {
+            "valor": {
+              "type": ["string", "null"],
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            }
+          }
+        }
+      ]
+    },
+    "canal": {
+      "enum": ["app", "web", "whatsapp", "telefone", "email", "presencial", "rede_social", "outro", "nao_informado"]
+    },
+    "categoria": {
+      "enum": [
+        "mobilidade_transito",
+        "infraestrutura_urbana",
+        "meio_ambiente",
+        "servicos_publicos",
+        "acessibilidade",
+        "uso_espaco_publico",
+        "seguranca_urbana"
+      ]
+    },
+    "subcategoria": {
+      "enum": [
+        "mob_semaforo", "mob_sinalizacao_viaria", "mob_seguranca_viaria", "mob_fluxo_congestionamento",
+        "mob_estacionamento_irregular", "mob_transporte_coletivo", "mob_ciclomobilidade", "mob_outros",
+        "inf_pavimento", "inf_calcada", "inf_drenagem", "inf_iluminacao_publica",
+        "inf_rede_eletrica", "inf_rede_agua_esgoto", "inf_estrutura_publica", "inf_outros",
+        "amb_descarte_irregular", "amb_poluicao_hidrica", "amb_poluicao_ar", "amb_poluicao_sonora",
+        "amb_arborizacao", "amb_area_verde", "amb_fauna_zoonoses", "amb_outros",
+        "svc_coleta_residuos", "svc_limpeza_urbana", "svc_abastecimento_agua", "svc_fornecimento_energia",
+        "svc_saude", "svc_educacao", "svc_atendimento_publico", "svc_outros",
+        "ace_rota_pedestre", "ace_rampa", "ace_piso_tatil", "ace_transporte",
+        "ace_edificacao_publica", "ace_vaga_reservada", "ace_comunicacao_sinalizacao", "ace_outros",
+        "esp_ocupacao_calcada", "esp_obra_particular", "esp_construcao_irregular", "esp_comercio_ambulante",
+        "esp_praca_parque", "esp_veiculo_abandonado", "esp_pichacao_publicidade", "esp_eventos_perturbacao", "esp_outros",
+        "seg_percepcao_inseguranca", "seg_ocorrencias_recorrentes", "seg_imovel_abandonado", "seg_risco_desastre",
+        "seg_incendio", "seg_vandalismo", "seg_outros"
+      ]
+    },
+    "natureza": {
+      "enum": ["problema_existente", "necessidade_infraestrutura"]
+    },
+    "regra_desempate": {
+      "enum": [
+        "rd01_acessibilidade_explicita",
+        "rd02_risco_estrutural_ou_desastre",
+        "rd03_causa_acionavel",
+        "rd04_foco_do_relator",
+        null
+      ]
+    },
+    "classificacao": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "categoria_principal", "subcategoria", "categorias_secundarias",
+        "ambigua", "motivo_ambiguidade", "regra_desempate", "confianca", "raciocinio"
+      ],
+      "properties": {
+        "categoria_principal": { "$ref": "#/$defs/categoria" },
+        "subcategoria": { "$ref": "#/$defs/subcategoria" },
+        "categorias_secundarias": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/categoria" }
+        },
+        "ambigua": { "type": "boolean" },
+        "motivo_ambiguidade": { "type": ["string", "null"] },
+        "regra_desempate": { "$ref": "#/$defs/regra_desempate" },
+        "confianca": {
+          "description": "Avaliação qualitativa, não probabilidade calibrada.",
+          "enum": ["alta", "media", "baixa"]
+        },
+        "raciocinio": { "$ref": "#/$defs/texto_nao_vazio" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "ambigua": { "const": true } }, "required": ["ambigua"] },
+          "then": { "properties": { "motivo_ambiguidade": { "$ref": "#/$defs/texto_nao_vazio" } } },
+          "else": { "properties": { "motivo_ambiguidade": { "type": "null" } } }
+        },
+        { "if": { "properties": { "categoria_principal": { "const": "mobilidade_transito" } }, "required": ["categoria_principal"] }, "then": { "properties": { "subcategoria": { "pattern": "^mob_" } } } },
+        { "if": { "properties": { "categoria_principal": { "const": "infraestrutura_urbana" } }, "required": ["categoria_principal"] }, "then": { "properties": { "subcategoria": { "pattern": "^inf_" } } } },
+        { "if": { "properties": { "categoria_principal": { "const": "meio_ambiente" } }, "required": ["categoria_principal"] }, "then": { "properties": { "subcategoria": { "pattern": "^amb_" } } } },
+        { "if": { "properties": { "categoria_principal": { "const": "servicos_publicos" } }, "required": ["categoria_principal"] }, "then": { "properties": { "subcategoria": { "pattern": "^svc_" } } } },
+        { "if": { "properties": { "categoria_principal": { "const": "acessibilidade" } }, "required": ["categoria_principal"] }, "then": { "properties": { "subcategoria": { "pattern": "^ace_" } } } },
+        { "if": { "properties": { "categoria_principal": { "const": "uso_espaco_publico" } }, "required": ["categoria_principal"] }, "then": { "properties": { "subcategoria": { "pattern": "^esp_" } } } },
+        { "if": { "properties": { "categoria_principal": { "const": "seguranca_urbana" } }, "required": ["categoria_principal"] }, "then": { "properties": { "subcategoria": { "pattern": "^seg_" } } } }
+      ]
+    },
+    "localizacao": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endereco_texto", "bairro", "ponto_referencia", "municipio", "latitude", "longitude", "precisao"],
+      "properties": {
+        "endereco_texto": { "allOf": [{ "$ref": "#/$defs/informacao_sem_inferencia" }, { "$ref": "#/$defs/informacao_texto" }] },
+        "bairro": { "allOf": [{ "$ref": "#/$defs/informacao_sem_inferencia" }, { "$ref": "#/$defs/informacao_texto" }] },
+        "ponto_referencia": { "$ref": "#/$defs/informacao_texto" },
+        "municipio": { "allOf": [{ "$ref": "#/$defs/informacao_sem_inferencia" }, { "$ref": "#/$defs/informacao_texto" }] },
+        "latitude": { "$ref": "#/$defs/latitude" },
+        "longitude": { "$ref": "#/$defs/longitude" },
+        "precisao": {
+          "description": "exata: endereço com número ou coordenada. aproximada: logradouro, cruzamento ou referência. ausente: nenhuma indicação.",
+          "enum": ["exata", "aproximada", "ausente"]
+        }
+      }
+    },
+    "codigo_fator": {
+      "enum": [
+        "risco_integridade_fisica",
+        "abrangencia",
+        "vulnerabilidade_afetados",
+        "impacto_servico_essencial",
+        "persistencia",
+        "risco_agravamento"
+      ]
+    },
+    "fator": {
+      "description": "Nota 0–3 ou null (ausente). Ausente não é zero.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nota", "status", "evidencia", "raciocinio", "verificacao"],
+      "properties": {
+        "nota": { "type": ["integer", "null"], "minimum": 0, "maximum": 3 },
+        "status": { "$ref": "#/$defs/status_informacao" },
+        "evidencia": { "type": ["string", "null"] },
+        "raciocinio": { "$ref": "#/$defs/texto_nao_vazio" },
+        "verificacao": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/verificacao" }]
+        }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/regras_status" },
+        { "$ref": "#/$defs/ausente_sem_evidencia" },
+        {
+          "if": { "properties": { "status": { "const": "ausente" } }, "required": ["status"] },
+          "then": { "properties": { "nota": { "type": "null" } } },
+          "else": { "properties": { "nota": { "type": "integer" } } }
+        }
+      ]
+    },
+    "nivel": {
+      "enum": ["baixa", "media", "alta", "critica"]
+    },
+    "regra_excecao": {
+      "enum": [
+        "ex01_risco_iminente",
+        "ex02_risco_fisico_grave_relatado",
+        "ex03_risco_com_vulnerabilidade",
+        "ex04_teto_necessidade_infraestrutura",
+        "ex05_informacao_insuficiente",
+        "ex06_falha_controle_trafego",
+        "ex07_barreira_acesso_servico_essencial"
+      ]
+    },
+    "prioridade": {
+      "description": "Prioridade de triagem (escala heurística, não avaliação de risco validada). Ver references/priorizacao.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "versao_matriz", "fatores", "pontuacao", "pontuacao_teto", "completude",
+        "nivel_base", "nivel", "nivel_teto", "pontuacao_provisoria", "regras_aplicadas", "justificativa"
+      ],
+      "properties": {
+        "versao_matriz": { "$ref": "#/$defs/versao" },
+        "fatores": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "risco_integridade_fisica", "abrangencia", "vulnerabilidade_afetados",
+            "impacto_servico_essencial", "persistencia", "risco_agravamento"
+          ],
+          "properties": {
+            "risco_integridade_fisica": { "$ref": "#/$defs/fator" },
+            "abrangencia": { "$ref": "#/$defs/fator" },
+            "vulnerabilidade_afetados": { "$ref": "#/$defs/fator" },
+            "impacto_servico_essencial": { "$ref": "#/$defs/fator" },
+            "persistencia": { "$ref": "#/$defs/fator" },
+            "risco_agravamento": { "$ref": "#/$defs/fator" }
+          }
+        },
+        "pontuacao": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "pontuacao_teto": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "completude": { "type": "number", "minimum": 0, "maximum": 1 },
+        "nivel_base": { "$ref": "#/$defs/nivel" },
+        "nivel": { "$ref": "#/$defs/nivel" },
+        "nivel_teto": { "$ref": "#/$defs/nivel" },
+        "pontuacao_provisoria": { "type": "boolean" },
+        "regras_aplicadas": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/regra_excecao" }
+        },
+        "justificativa": { "type": "string", "minLength": 30 }
+      }
+    },
+    "orgao": {
+      "enum": [
+        "org_transito_mobilidade", "org_transporte_coletivo", "org_obras_vias", "org_iluminacao_publica",
+        "org_drenagem_urbana", "org_limpeza_urbana", "org_meio_ambiente", "org_areas_verdes",
+        "org_vigilancia_zoonoses", "org_saude", "org_educacao", "org_acessibilidade_inclusao",
+        "org_fiscalizacao_posturas", "org_controle_urbano", "org_defesa_civil", "org_seguranca_publica",
+        "servico_bombeiros", "concessionaria_energia", "concessionaria_saneamento", "org_ouvidoria"
+      ]
+    },
+    "orgao_sugerido": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "apoio", "status"],
+      "properties": {
+        "principal": { "$ref": "#/$defs/orgao" },
+        "apoio": {
+          "type": "array",
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/orgao" }
+        },
+        "status": { "enum": ["inferido", "verificado"] }
+      }
+    },
+    "alegacao_irregularidade": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["presente", "tipo", "descricao_neutra", "status_verificacao"],
+      "properties": {
+        "presente": { "type": "boolean" },
+        "tipo": {
+          "enum": [
+            "obra_sem_licenca", "descarte_ou_poluicao_ilegal", "ocupacao_irregular_area_publica",
+            "conduta_agente_publico", "cobranca_indevida", "descumprimento_servico", "outro", null
+          ]
+        },
+        "descricao_neutra": { "type": ["string", "null"] },
+        "status_verificacao": {
+          "description": "A skill usa sempre pendente_verificacao. confirmada/nao_confirmada são atribuídos por quem apurar.",
+          "enum": ["pendente_verificacao", "confirmada", "nao_confirmada", null]
+        }
+      },
+      "if": { "properties": { "presente": { "const": true } }, "required": ["presente"] },
+      "then": {
+        "properties": {
+          "tipo": { "type": "string" },
+          "descricao_neutra": { "$ref": "#/$defs/texto_nao_vazio" },
+          "status_verificacao": { "type": "string" }
+        }
+      },
+      "else": {
+        "properties": {
+          "tipo": { "type": "null" },
+          "descricao_neutra": { "type": "null" },
+          "status_verificacao": { "type": "null" }
+        }
+      }
+    },
+    "pendencia": {
+      "enum": [
+        "descricao_insuficiente",
+        "localizacao_ausente",
+        "localizacao_imprecisa",
+        "data_ausente",
+        "complementar_dados_prioridade",
+        "classificacao_ambigua",
+        "verificar_alegacao",
+        "revisao_humana_recomendada"
+      ]
+    },
+    "lista_pendencias": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/pendencia" }
+    },
+    "ocorrencia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id_ocorrencia", "descricao_neutra", "natureza", "classificacao", "localizacao",
+        "data_ocorrencia", "prioridade", "orgao_sugerido", "alegacao_irregularidade", "pendencias",
+        "requer_obra_adequacao"
+      ],
+      "properties": {
+        "id_ocorrencia": {
+          "description": "Sequencial dentro da análise. Identificador global: (id_analise, id_ocorrencia).",
+          "type": "string",
+          "pattern": "^oc-[1-9][0-9]*$"
+        },
+        "descricao_neutra": {
+          "description": "Resumo factual, sem dados pessoais e sem afirmar alegações como fato.",
+          "$ref": "#/$defs/texto_nao_vazio"
+        },
+        "natureza": { "$ref": "#/$defs/natureza" },
+        "classificacao": { "$ref": "#/$defs/classificacao" },
+        "localizacao": { "$ref": "#/$defs/localizacao" },
+        "data_ocorrencia": { "$ref": "#/$defs/data_ocorrencia" },
+        "prioridade": { "$ref": "#/$defs/prioridade" },
+        "orgao_sugerido": { "$ref": "#/$defs/orgao_sugerido" },
+        "alegacao_irregularidade": { "$ref": "#/$defs/alegacao_irregularidade" },
+        "pendencias": { "$ref": "#/$defs/lista_pendencias" },
+        "requer_obra_adequacao": {
+          "description": "true quando um problema existente exige obra para cumprir uma exigência obrigatória (ex.: escola sem rampa de acessibilidade). Sempre false em necessidade_infraestrutura, que é obra nova. Desde o schema 1.2.0.",
+          "type": "boolean"
+        }
+      },
+      "if": { "properties": { "natureza": { "const": "necessidade_infraestrutura" } }, "required": ["natureza"] },
+      "then": { "properties": { "requer_obra_adequacao": { "const": false } } }
+    },
+    "tipo_dado_pessoal": {
+      "enum": [
+        "nome_pessoa", "cpf", "documento_identificacao", "telefone", "email",
+        "placa_veiculo", "endereco_residencial", "dado_sensivel", "empresa_em_alegacao"
+      ]
+    },
+    "dados_pessoais": {
+      "description": "Tipos de dado pessoal mascarados neste documento (varia entre visibilidade interna e publica). Os valores mascarados nunca são copiados.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["detectados", "tipos", "mascaramento_aplicado", "texto_relato_publicavel"],
+      "properties": {
+        "detectados": { "type": "boolean" },
+        "tipos": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/tipo_dado_pessoal" }
+        },
+        "mascaramento_aplicado": { "type": "boolean" },
+        "texto_relato_publicavel": {
+          "description": "true quando o texto_mascarado e as evidências literais deste documento podem ser exibidos em relatórios e painéis públicos. Sempre false em visibilidade interna e quando há dado sensível de pessoa identificável (dado_sensivel em tipos): nesses casos a saída pública usa só descricao_neutra e raciocínios genéricos. Desde o schema 1.2.0.",
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "tipos": { "contains": { "const": "dado_sensivel" } } }, "required": ["tipos"] },
+          "then": { "properties": { "texto_relato_publicavel": { "const": false } } }
+        }
+      ],
+      "if": { "properties": { "detectados": { "const": true } }, "required": ["detectados"] },
+      "then": {
+        "properties": {
+          "tipos": { "minItems": 1 },
+          "mascaramento_aplicado": { "const": true }
+        }
+      },
+      "else": {
+        "properties": { "tipos": { "maxItems": 0 } }
+      }
+    },
+    "servico_emergencia": {
+      "enum": [
+        "samu_192",
+        "bombeiros_193",
+        "policia_190",
+        "defesa_civil_199",
+        "emergencia_concessionaria_energia",
+        "emergencia_concessionaria_saneamento"
+      ]
+    },
+    "alerta_emergencia": {
+      "description": "A skill orienta o acionamento; não aciona nenhum serviço.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["acionar", "servicos", "motivo", "origem"],
+      "properties": {
+        "acionar": { "type": "boolean" },
+        "servicos": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/servico_emergencia" }
+        },
+        "motivo": { "type": ["string", "null"] },
+        "origem": {
+          "description": "id_ocorrencia que originou o alerta, ou 'triagem' para relato fora de escopo.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^(oc-[1-9][0-9]*|triagem)$" }
+        }
+      },
+      "if": { "properties": { "acionar": { "const": true } }, "required": ["acionar"] },
+      "then": {
+        "properties": {
+          "servicos": { "minItems": 1 },
+          "motivo": { "$ref": "#/$defs/texto_nao_vazio" },
+          "origem": { "minItems": 1 }
+        }
+      },
+      "else": {
+        "properties": {
+          "servicos": { "maxItems": 0 },
+          "motivo": { "type": "null" },
+          "origem": { "maxItems": 0 }
+        }
+      }
+    },
+    "relato": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id_externo", "hash_texto", "canal", "recebido_em", "texto_original", "texto_mascarado"],
+      "properties": {
+        "id_externo": {
+          "description": "Identificador do relato no sistema de origem, quando houver.",
+          "type": ["string", "null"]
+        },
+        "hash_texto": {
+          "description": "SHA-256 (hex) do texto original normalizado (NFC, espaços colapsados, sem espaços nas pontas). Usado para deduplicação.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "canal": { "$ref": "#/$defs/canal" },
+        "recebido_em": {
+          "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/data_hora" }]
+        },
+        "texto_original": {
+          "description": "Somente em visibilidade interna. Sempre nulo em visibilidade publica.",
+          "type": ["string", "null"]
+        },
+        "texto_mascarado": { "$ref": "#/$defs/texto_nao_vazio" }
+      }
+    },
+    "metadados": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gerado_por", "versao_skill", "versao_taxonomia", "versao_matriz_prioridade", "analisado_em"],
+      "properties": {
+        "gerado_por": { "const": "ecorastro-analisador" },
+        "versao_skill": { "$ref": "#/$defs/versao" },
+        "versao_taxonomia": { "$ref": "#/$defs/versao" },
+        "versao_matriz_prioridade": { "$ref": "#/$defs/versao" },
+        "analisado_em": { "$ref": "#/$defs/data_hora" }
+      }
+    },
+    "resultado_triagem": {
+      "enum": ["classificado", "informacao_insuficiente", "fora_escopo"]
+    },
+    "analise_relato": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "tipo_documento", "id_analise", "visibilidade", "relato",
+        "resultado_triagem", "motivo_triagem", "ocorrencias", "pendencias",
+        "dados_pessoais", "alerta_emergencia", "metadados"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.2.0" },
+        "tipo_documento": { "const": "analise_relato" },
+        "id_analise": { "$ref": "#/$defs/uuid" },
+        "visibilidade": { "$ref": "#/$defs/visibilidade" },
+        "relato": { "$ref": "#/$defs/relato" },
+        "resultado_triagem": { "$ref": "#/$defs/resultado_triagem" },
+        "motivo_triagem": { "type": ["string", "null"] },
+        "ocorrencias": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ocorrencia" }
+        },
+        "pendencias": {
+          "description": "Pendências do relato como um todo (ex.: descricao_insuficiente na triagem).",
+          "$ref": "#/$defs/lista_pendencias"
+        },
+        "dados_pessoais": { "$ref": "#/$defs/dados_pessoais" },
+        "alerta_emergencia": { "$ref": "#/$defs/alerta_emergencia" },
+        "metadados": { "$ref": "#/$defs/metadados" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "visibilidade": { "const": "publica" } }, "required": ["visibilidade"] },
+          "then": { "properties": { "relato": { "properties": { "texto_original": { "type": "null" } } } } }
+        },
+        {
+          "if": { "properties": { "visibilidade": { "const": "interna" } }, "required": ["visibilidade"] },
+          "then": { "properties": { "dados_pessoais": { "properties": { "texto_relato_publicavel": { "const": false } } } } }
+        },
+        {
+          "if": { "properties": { "resultado_triagem": { "const": "classificado" } }, "required": ["resultado_triagem"] },
+          "then": {
+            "properties": {
+              "ocorrencias": { "minItems": 1 },
+              "motivo_triagem": { "type": "null" }
+            }
+          },
+          "else": {
+            "properties": {
+              "ocorrencias": { "maxItems": 0 },
+              "motivo_triagem": { "$ref": "#/$defs/texto_nao_vazio" }
+            }
+          }
+        }
+      ]
+    },
+    "contagem": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lote_analises": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "tipo_documento", "id_lote", "visibilidade",
+        "gerado_em", "total_relatos", "analises", "resumo", "metadados"
+      ],
+      "properties": {
+        "schema_version": { "const": "1.2.0" },
+        "tipo_documento": { "const": "lote_analises" },
+        "id_lote": { "$ref": "#/$defs/uuid" },
+        "visibilidade": {
+          "description": "Todas as análises do lote devem ter a mesma visibilidade (verificado por script).",
+          "$ref": "#/$defs/visibilidade"
+        },
+        "gerado_em": { "$ref": "#/$defs/data_hora" },
+        "total_relatos": { "$ref": "#/$defs/contagem" },
+        "analises": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/analise_relato" }
+        },
+        "resumo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "por_resultado_triagem", "por_categoria", "por_nivel",
+            "por_natureza", "total_ocorrencias", "total_alertas_emergencia", "total_alegacoes"
+          ],
+          "properties": {
+            "por_resultado_triagem": {
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/resultado_triagem" },
+              "additionalProperties": { "$ref": "#/$defs/contagem" }
+            },
+            "por_categoria": {
+              "description": "Contagem de ocorrências por categoria principal.",
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/categoria" },
+              "additionalProperties": { "$ref": "#/$defs/contagem" }
+            },
+            "por_nivel": {
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/nivel" },
+              "additionalProperties": { "$ref": "#/$defs/contagem" }
+            },
+            "por_natureza": {
+              "type": "object",
+              "propertyNames": { "$ref": "#/$defs/natureza" },
+              "additionalProperties": { "$ref": "#/$defs/contagem" }
+            },
+            "total_ocorrencias": { "$ref": "#/$defs/contagem" },
+            "total_alertas_emergencia": { "$ref": "#/$defs/contagem" },
+            "total_alegacoes": { "$ref": "#/$defs/contagem" }
+          }
+        },
+        "metadados": { "$ref": "#/$defs/metadados" }
+      }
+    }
+  }
+}

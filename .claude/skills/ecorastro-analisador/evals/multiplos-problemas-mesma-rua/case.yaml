@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: multiplos-problemas-mesma-rua
+expected_outcome: |
+  Um relato com três problemas independentes, que viram três ocorrências: inf_iluminacao_publica, inf_pavimento
+  (com meio_ambiente como secundária, porque o mosquito é efeito do mesmo buraco) e svc_coleta_residuos.
+  Cada uma tem prioridade própria. Bairro Jardim Esperança relatado. Persistência: poste nota 2 (um mês),
+  lixo nota 1 (10 dias).

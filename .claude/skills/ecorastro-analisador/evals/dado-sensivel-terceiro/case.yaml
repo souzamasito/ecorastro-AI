@@ -1,0 +1,10 @@
+schema_version: "1.1"
+name: dado-sensivel-terceiro
+expected_outcome: |
+  Relato sobre terceiro identificável (nome e residência) com duas características sensíveis: a deficiência, que
+  sustenta a vulnerabilidade, e a sorologia, que não tem relação com o problema. Interna: [NOME], sorologia como
+  [DADO_SENSIVEL], "cadeirante" mantido como evidência da vulnerabilidade, número 45 mantido. Pública (skill
+  0.3.0, proteção contra reidentificação): nome e número da casa mascarados; as duas condições do morador num único
+  [DADO_SENSIVEL]; a menção coletiva "Os cadeirantes do bairro" também mascarada, porque com a rua e a queda na
+  porta de casa permitiria deduzir a condição; texto_relato_publicavel false; relatório público só com o resumo
+  anonimizado. Quedas já ocorridas: risco físico 3 relatado, ex02, prioridade alta. Resposta sem nome nem sorologia.

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: relato-vago-sem-informacao
+expected_outcome: |
+  Não é possível identificar o problema nem o local. Resultado informacao_insuficiente, sem ocorrências e sem
+  prioridade, com motivo_triagem e pendências descricao_insuficiente e localizacao_ausente. A resposta sugere
+  perguntas concretas para pedir ao cidadão, sem chutar uma categoria.

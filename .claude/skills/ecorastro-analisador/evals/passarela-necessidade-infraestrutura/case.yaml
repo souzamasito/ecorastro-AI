@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: passarela-necessidade-infraestrutura
+expected_outcome: |
+  Pedido de algo que não existe: natureza necessidade_infraestrutura, categoria mob_seguranca_viaria (aceitável
+  inf_estrutura_publica). O atropelamento relatado aciona ex02 (mínimo alta) e ex04 limita a alta, então o nível é
+  alta. Não há perigo imediato concreto (fato do ano passado; 'urgente' é ênfase), logo sem ex01 e sem alerta.
+  A resposta indica que é demanda de planejamento, não de manutenção.
